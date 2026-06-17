@@ -56,7 +56,7 @@ PORT=10000
 ### Web Service
 
 1. Crie um **Web Service** a partir deste repositório.
-2. Use Docker ou o blueprint `render.yaml`.
+2. Use Docker/blueprint `render.yaml` ou configure manualmente **Build Command** como `yarn` e **Start Command** como `yarn start`. O `start` agora também cria o build de produção, evitando o erro `Cannot find module dist/server.js` quando a Render executa apenas `yarn` no build.
 3. Configure o health check em `/api/health`.
 4. Garanta `PORT=10000`.
 5. Defina `ADMIN_TOKEN` e `INTERNAL_API_TOKEN` como secrets.
@@ -75,11 +75,11 @@ Redeploys não apagam a sessão se o disco continuar anexado ao serviço.
 
 - `npm run dev` — sobe Express + Next em desenvolvimento.
 - `npm run build` — gera Prisma Client, build Next e compila o servidor Express.
-- `npm run start` — executa `dist/server.js`.
+- `npm run start` — caminho compatível com o padrão da Render: gera Prisma Client, aplica `prisma db push`, executa `next build` e sobe `tsx server.ts` em processo persistente.
 - `npm run prisma:generate` — gera Prisma Client.
 - `npm run prisma:migrate` — roda `prisma migrate deploy`.
 - `npm run render:build` — instalação limpa e build para Render.
-- `npm run render:start` — aplica migrations e inicia o processo persistente.
+- `npm run render:start` — alias de produção para o mesmo start persistente usado pela Render.
 
 ## Pareamento WhatsApp pela interface
 
