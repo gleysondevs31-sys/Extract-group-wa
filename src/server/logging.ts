@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 type LogClient = { write: (chunk: string) => void };
@@ -17,7 +18,7 @@ export async function systemLog(category: string, message: string, level = "info
 }
 
 export async function audit(action: string, actor?: string, metadata?: Record<string, unknown>) {
-  await prisma.auditLog.create({ data: { action, actor, metadata: metadata || {} } }).catch(() => undefined);
+  await prisma.auditLog.create({ data: { action, actor, metadata: (metadata || {}) as Prisma.InputJsonValue } }).catch(() => undefined);
 }
 
 export function addLogClient(client: LogClient) {
