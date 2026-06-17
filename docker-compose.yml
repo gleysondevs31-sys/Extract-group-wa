@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bot
+      POSTGRES_PASSWORD: bot
+      POSTGRES_DB: bot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  worker:
+    build: ./worker
+    env_file: ./worker/.env.example
+    ports: ["8080:8080"]
+    volumes:
+      - baileys-session:/data/baileys-session
+    depends_on: [postgres]
+volumes: { pgdata: {}, baileys-session: {} }
