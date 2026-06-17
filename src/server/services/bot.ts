@@ -78,7 +78,9 @@ class BotService {
     const inviteCode = match[1];
     const inviteHash = crypto.createHash("sha256").update(inviteCode).digest("hex").slice(0, 16);
     await systemLog("group", "validating invite");
-    const jid = await this.socket.groupAcceptInvite(inviteCode);
+    const acceptedJid = await this.socket.groupAcceptInvite(inviteCode);
+    if (!acceptedJid) throw new Error("Não foi possível entrar no grupo pelo convite informado");
+    const jid = acceptedJid;
     await systemLog("group", "joined group");
     await new Promise((resolve) => setTimeout(resolve, 2500));
     const metadata = await this.socket.groupMetadata(jid);
