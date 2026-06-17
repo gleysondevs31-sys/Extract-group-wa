@@ -1,100 +1,120 @@
-# WhatsApp Bot Admin + Baileys Worker
+# WhatsApp Baileys Admin para Render
 
-Painel profissional para controlar um bot WhatsApp com **Baileys v7.0.0-rc.9** sem executar o bot na Vercel. A Vercel hospeda apenas o frontend Next.js; o processo Baileys roda em um worker Node.js persistente.
+Aplicação única para Render que junta painel admin Next.js 15, API Express interna, Bot WhatsApp com Baileys `7.0.0-rc.9`, Prisma e PostgreSQL. Não usa Vercel, serverless nem Edge Functions: o processo Node permanece vivo para manter WebSocket, reconexão e sessão do WhatsApp.
 
 ## Arquitetura
 
-- **Frontend/Admin Panel**: Next.js 15, App Router, TypeScript, TailwindCSS, componentes estilo shadcn/ui, React Hook Form, Zod, Sonner e Lucide.
-- **Bot Worker**: Node.js + Express + Baileys `7.0.0-rc.9`, com API REST protegida por `INTERNAL_API_TOKEN`.
-- **Persistência**: Prisma ORM; SQLite para desenvolvimento e PostgreSQL em produção. Sessões Baileys devem ficar em volume/disco persistente ou storage privado, nunca em pasta pública.
-- **Comunicação**: o frontend chama rotas internas `/api/bot/*`; essas rotas fazem proxy para o worker usando `Authorization: Bearer INTERNAL_API_TOKEN`. O token interno nunca é exposto ao navegador.
+- `server.ts` sobe um servidor Express persistente na porta `PORT` e acopla o Next.js App Router.
+- Rotas `/api/*` são atendidas pelo Express antes do Next e controlam autenticação, bot, histórico, downloads, logs SSE e configurações.
+- `src/server/services/bot.ts` transforma o Baileys em serviço controlável por API: `startBot`, `requestPairingCode`, `analyzeGroup`, `disconnect`, `logout` e `getStatus`.
+- `SESSION_PATH` guarda o `auth_info` fora da pasta pública.
+- `EXPORT_PATH` guarda relatórios TXT/CSV.
+- `LOG_PATH` fica reservado para logs em disco e o banco salva `SystemLog`.
+- PostgreSQL da Render é usado em produção; SQLite é apenas uma alternativa para desenvolvimento local caso você ajuste o provider do Prisma em um branch local.
 
 ## Variáveis de ambiente
 
-Frontend (`.env.example`):
-
-```bash
-NEXT_PUBLIC_BOT_API_URL=https://worker.example.com
-ADMIN_TOKEN=change-me-admin-token
-INTERNAL_API_TOKEN=change-me-internal-token
-DATABASE_URL=file:./dev.db
-```
-
-Worker (`worker/.env.example`):
-
-```bash
-PORT=8080
+```env
 NODE_ENV=production
-INTERNAL_API_TOKEN=change-me-internal-token
-DATABASE_URL=postgresql://bot:bot@localhost:5432/bot?schema=public
-SESSION_DIR=/data/baileys-session
-MAX_RUNS_PER_HOUR=5
-ANALYSIS_COOLDOWN_SECONDS=600
-MAX_GROUP_SIZE=1024
+DATABASE_URL=postgresql://...
+ADMIN_TOKEN=troque-este-token
+INTERNAL_API_TOKEN=troque-este-token-interno
+SESSION_PATH=/data/auth_info
+EXPORT_PATH=/data/exports
+LOG_PATH=/data/logs
+PORT=10000
 ```
 
-## Desenvolvimento local
+## Rodando localmente
 
-```bash
-npm install
-npx prisma generate
-npm run dev
-```
+1. Instale dependências:
+   ```bash
+   npm install
+   ```
+2. Configure `.env` com base em `.env.example` e um PostgreSQL local.
+3. Gere o Prisma Client:
+   ```bash
+   npm run prisma:generate
+   ```
+4. Aplique migrações quando existir uma migration criada:
+   ```bash
+   npx prisma migrate dev
+   ```
+5. Rode o app persistente:
+   ```bash
+   npm run dev
+   ```
+6. Acesse `http://localhost:10000/login` e entre com `ADMIN_TOKEN`.
 
-Worker:
+## Deploy na Render
 
-```bash
-cd worker
-npm install
-npm run dev
-```
+### Banco PostgreSQL
 
-> O arquivo `worker/src/server.ts` entrega a API, segurança, SSE, histórico e stubs operacionais. Para produção, conecte as funções reais do Baileys usando `useMultiFileAuthState(process.env.SESSION_DIR)` e persista `SESSION_DIR` em volume privado.
+1. Crie um PostgreSQL na Render ou use o `render.yaml`, que declara `whatsapp-baileys-db`.
+2. Copie a `connectionString` para `DATABASE_URL` se criar manualmente.
 
-## Deploy na Vercel
+### Web Service
 
-1. Configure `NEXT_PUBLIC_BOT_API_URL`, `ADMIN_TOKEN` e `INTERNAL_API_TOKEN` no projeto Vercel.
-2. Faça deploy somente do frontend Next.js.
-3. Não coloque sessão Baileys, `auth_info`, tokens ou credenciais em `public/`.
-4. O painel exige login com `ADMIN_TOKEN` e todas as páginas internas são protegidas por middleware.
+1. Crie um **Web Service** a partir deste repositório.
+2. Use Docker ou o blueprint `render.yaml`.
+3. Configure o health check em `/api/health`.
+4. Garanta `PORT=10000`.
+5. Defina `ADMIN_TOKEN` e `INTERNAL_API_TOKEN` como secrets.
 
-## Deploy do Bot Worker
+### Persistent Disk
 
-Use VPS, Railway, Render, Fly.io ou Docker. O processo precisa ser persistente por causa de WebSocket, conexão WhatsApp e sessão contínua.
+Adicione um disco persistente montado em `/data`. O blueprint já cria:
 
-### Docker Compose opcional
+- `/data/auth_info` para sessão Baileys.
+- `/data/exports` para TXT/CSV.
+- `/data/logs` para logs em disco.
 
-```bash
-docker compose up -d --build
-```
+Redeploys não apagam a sessão se o disco continuar anexado ao serviço.
 
-O compose cria PostgreSQL e um volume `/data/baileys-session` para sessão persistente.
+## Scripts
 
-## Gerar código de pareamento
+- `npm run dev` — sobe Express + Next em desenvolvimento.
+- `npm run build` — gera Prisma Client, build Next e compila o servidor Express.
+- `npm run start` — executa `dist/server.js`.
+- `npm run prisma:generate` — gera Prisma Client.
+- `npm run prisma:migrate` — roda `prisma migrate deploy`.
+- `npm run render:build` — instalação limpa e build para Render.
+- `npm run render:start` — aplica migrations e inicia o processo persistente.
 
-1. Entre no painel.
-2. Abra **Pareamento**.
-3. Informe o telefone com DDI, por exemplo `5511999999999`.
-4. Clique em **Gerar código de pareamento**.
-5. No WhatsApp, acesse: **Aparelhos conectados > Conectar com número de telefone**.
+## Pareamento WhatsApp pela interface
 
-## Segurança e uso permitido
+1. Abra **Pareamento**.
+2. Digite o número com DDI, por exemplo `5511999999999`.
+3. Clique em **Gerar código de pareamento**.
+4. No WhatsApp, siga: **Aparelhos conectados > Conectar com número de telefone**.
+5. Informe o código exibido no painel, no formato `1234-5678`.
 
-- Todas as rotas do worker, exceto `GET /health`, exigem `Authorization: Bearer INTERNAL_API_TOKEN`.
-- O painel não implementa disparo em massa, spam ou automação para adicionar pessoas sem consentimento.
-- A análise de grupo deve ser usada somente em grupos próprios, com autorização e finalidade interna permitida.
-- O histórico salva apenas `inviteHash` parcial, nunca o link completo.
-- Logs sanitizam tokens e não devem exibir credenciais ou sessão.
+O fluxo não usa terminal, `readline` nem QR Code como caminho principal.
 
-## Rotas do Worker
+## Análise de grupos
 
-- `GET /health`
-- `GET /bot/status`
-- `POST /bot/pairing-code`
-- `POST /bot/disconnect`
-- `POST /bot/logout`
-- `POST /groups/analyze`
-- `GET /groups/history`
-- `GET /groups/history/:id`
-- `DELETE /groups/history/:id`
-- `GET /logs/stream`
+Use apenas em grupos próprios, com autorização e consentimento. O painel exige aviso de uso autorizado antes da análise. O backend valida links `https://chat.whatsapp.com/...`, entra no grupo, aguarda sincronização, busca `groupMetadata`, sai imediatamente, resolve PN/LID, gera TXT/CSV e salva histórico no PostgreSQL. O link completo não é salvo; apenas hash parcial do convite.
+
+## Logs
+
+A tela **Logs** consome `/api/logs/stream` por Server-Sent Events. Logs sensíveis são sanitizados para não exibir tokens, sessão, `auth_info` ou credenciais.
+
+## Erro de sessão
+
+Se a sessão corromper ou o WhatsApp fizer logout:
+
+1. Abra **Dashboard**.
+2. Clique em **Apagar sessão**.
+3. Volte para **Pareamento** e gere um novo código.
+4. Confirme que `/api/health` mostra disco persistente OK.
+
+## Redeploy sem perder sessão
+
+Nunca remova o Persistent Disk da Render. O deploy pode recriar o container, mas `/data/auth_info`, `/data/exports` e `/data/logs` permanecem no disco anexado.
+
+## Segurança
+
+- Todas as rotas privadas exigem cookie httpOnly de admin ou `Authorization: Bearer INTERNAL_API_TOKEN`.
+- `auth_info` nunca fica em `public/` e nunca é enviado ao frontend.
+- Há rate limit global, validação Zod e auditoria para login, pairing, análise, logout e apagar sessão.
+- Não há disparo em massa, spam ou automação para abordar contatos sem consentimento.
