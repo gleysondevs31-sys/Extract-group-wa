@@ -1,0 +1,1 @@
+import { Sidebar } from "@/components/sidebar";export default function AdminLayout({children}:{children:React.ReactNode}){return <div className="grid min-h-screen md:grid-cols-[260px_1fr]"><Sidebar/><main className="p-4 md:p-8">{children}</main></div>}

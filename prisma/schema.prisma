@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  tokenHash String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model BotSessionStatus {
+  id             String    @id @default(cuid())
+  status         String
+  phoneNumber    String?
+  lastConnection DateTime?
+  uptimeSeconds  Int       @default(0)
+  baileysVersion String    @default("7.0.0-rc.9")
+  environment    String    @default("development")
+  errorMessage    String?
+  updatedAt      DateTime  @updatedAt
+}
+
+model GroupAnalysis {
+  id                String             @id @default(cuid())
+  groupName         String
+  inviteHash        String
+  totalParticipants Int
+  resolvedNumbers   Int
+  hiddenLids        Int
+  txtPath           String?
+  csvPath           String?
+  createdAt         DateTime           @default(now())
+  status            String
+  errorMessage      String?
+  participants      GroupParticipant[]
+}
+
+model GroupParticipant {
+  id          String        @id @default(cuid())
+  analysisId  String
+  role        String
+  number      String?
+  technicalId String
+  type        String
+  analysis    GroupAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String
+  category  String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  actor     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

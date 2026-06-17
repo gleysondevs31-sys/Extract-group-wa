@@ -1,0 +1,1 @@
+import { clsx, type ClassValue } from "clsx";import { twMerge } from "tailwind-merge";export function cn(...inputs:ClassValue[]){return twMerge(clsx(inputs))}export function maskSecret(v?:string){return v?`${v.slice(0,4)}…${v.slice(-4)}`:""}
