@@ -56,7 +56,7 @@ PORT=10000
 ### Web Service
 
 1. Crie um **Web Service** a partir deste repositório.
-2. Use Docker/blueprint `render.yaml` ou configure manualmente **Build Command** como `yarn` e **Start Command** como `yarn start`. O `start` agora também cria o build de produção, evitando o erro `Cannot find module dist/server.js` quando a Render executa apenas `yarn` no build.
+2. Use Docker/blueprint `render.yaml` ou configure manualmente **Build Command** como `yarn` e **Start Command** como `yarn start`. O `postinstall` cria o build de produção durante `yarn`, e o `start` apenas aplica o push condicional do banco e abre a porta rapidamente, evitando timeouts de porta durante `next build`.
 3. Configure o health check em `/api/health`.
 4. Garanta `PORT=10000`.
 5. Defina `ADMIN_TOKEN` e `INTERNAL_API_TOKEN` como secrets. Configure também `DATABASE_URL`; sem ela o app sobe, mas o banco aparecerá como indisponível até a variável ser adicionada.
@@ -75,7 +75,8 @@ Redeploys não apagam a sessão se o disco continuar anexado ao serviço.
 
 - `npm run dev` — sobe Express + Next em desenvolvimento.
 - `npm run build` — gera Prisma Client, build Next e compila o servidor Express.
-- `npm run start` — caminho compatível com o padrão da Render: gera Prisma Client, aplica `prisma db push` somente quando `DATABASE_URL` existir, executa `next build` e sobe `tsx server.ts` em processo persistente.
+- `npm run start` — caminho compatível com o padrão da Render: aplica `prisma db push` somente quando `DATABASE_URL` existir e sobe `tsx server.ts` rapidamente; o build do Next é feito no `postinstall` durante o comando `yarn`.
+- `postinstall` — executado automaticamente pelo `yarn` na fase de build da Render para rodar `prisma generate` e `next build`.
 - `npm run prisma:generate` — gera Prisma Client.
 - `npm run prisma:migrate` — roda `prisma migrate deploy`.
 - `npm run render:build` — instalação limpa e build para Render.

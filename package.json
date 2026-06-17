@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "tsx server.ts dev",
     "build": "prisma generate && next build && tsc -p tsconfig.server.json",
-    "start": "prisma generate && npm run db:push && next build && tsx server.ts",
+    "start": "npm run db:push && tsx server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "render:build": "npm ci && npm run build",
     "render:start": "npm run start",
     "serve": "node dist/server.js",
-    "db:push": "if [ -n \"$DATABASE_URL\" ]; then prisma db push; else echo \"DATABASE_URL not set; skipping prisma db push\"; fi"
+    "db:push": "if [ -n \"$DATABASE_URL\" ]; then prisma db push; else echo \"DATABASE_URL not set; skipping prisma db push\"; fi",
+    "postinstall": "prisma generate && next build"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
