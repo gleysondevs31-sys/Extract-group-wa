@@ -8,7 +8,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   type WASocket,
 } from "baileys";
-import { prisma } from "../prisma.js";
+import { hasDatabaseUrl, prisma } from "../prisma.js";
 import { paths } from "../paths.js";
 import { systemLog } from "../logging.js";
 
@@ -104,6 +104,7 @@ class BotService {
     await fs.writeFile(txtPath, participants.map((p) => `${p.role}\t${p.number || ""}\t${p.technicalId}\t${p.type}`).join("\n"));
     await fs.writeFile(csvPath, ["role,number,technicalId,type", ...participants.map((p) => [p.role, p.number || "", p.technicalId, p.type].map(csv).join(","))].join("\n"));
     await systemLog("export", "TXT and CSV reports generated");
+    if (!hasDatabaseUrl()) throw new Error("DATABASE_URL não configurada; análise não pode ser salva no banco");
     return prisma.groupAnalysis.create({
       data: {
         groupName: metadata.subject || "Grupo sem nome",
@@ -150,6 +151,7 @@ class BotService {
 
   private async persistStatus() {
     const status = await this.getStatus();
+    if (!hasDatabaseUrl()) return;
     await prisma.botSessionStatus.upsert({
       where: { id: "singleton" },
       create: { id: "singleton", ...status },

@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "./prisma.js";
+import { hasDatabaseUrl, prisma } from "./prisma.js";
 
 type LogClient = { write: (chunk: string) => void };
 const clients = new Set<LogClient>();
@@ -12,13 +12,13 @@ export function sanitize(message: string) {
 
 export async function systemLog(category: string, message: string, level = "info") {
   const safe = sanitize(message);
-  await prisma.systemLog.create({ data: { category, message: safe, level } }).catch(() => undefined);
+  if (hasDatabaseUrl()) await prisma.systemLog.create({ data: { category, message: safe, level } }).catch(() => undefined);
   const payload = JSON.stringify({ at: new Date().toISOString(), category, level, message: safe });
   clients.forEach((client) => client.write(`data: ${payload}\n\n`));
 }
 
 export async function audit(action: string, actor?: string, metadata?: Record<string, unknown>) {
-  await prisma.auditLog.create({ data: { action, actor, metadata: (metadata || {}) as Prisma.InputJsonValue } }).catch(() => undefined);
+  if (hasDatabaseUrl()) await prisma.auditLog.create({ data: { action, actor, metadata: (metadata || {}) as Prisma.InputJsonValue } }).catch(() => undefined);
 }
 
 export function addLogClient(client: LogClient) {

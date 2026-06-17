@@ -6,7 +6,7 @@ import cookie from "cookie";
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { prisma } from "./src/server/prisma.js";
+import { hasDatabaseUrl, prisma } from "./src/server/prisma.js";
 import { ensureDataDirs, paths } from "./src/server/paths.js";
 import { addLogClient, audit, systemLog } from "./src/server/logging.js";
 import { botService } from "./src/server/services/bot.js";
@@ -43,7 +43,7 @@ server.use((req, res, nextFn) => {
 
 server.get("/api/health", async (_req, res) => {
   const disk = await Promise.all(Object.entries(paths).map(async ([key, value]) => [key, value, await exists(value)]));
-  const database = await prisma.$queryRaw`SELECT 1`.then(() => "connected").catch(() => "error");
+  const database = hasDatabaseUrl() ? await prisma.$queryRaw`SELECT 1`.then(() => "connected").catch(() => "error") : "missing_config";
   res.json({ ok: true, database, disk: Object.fromEntries(disk.map(([k, , ok]) => [k, ok])), paths, nodeEnv: process.env.NODE_ENV });
 });
 
@@ -75,13 +75,18 @@ server.post("/api/groups/analyze", async (req, res) => safe(res, async () => {
   return botService.analyzeGroup(inviteUrl);
 }));
 server.get("/api/groups/history", async (req, res) => {
+  if (!hasDatabaseUrl()) return res.json([]);
   const name = String(req.query.name || "");
   const status = String(req.query.status || "");
   res.json(await prisma.groupAnalysis.findMany({ where: { ...(name ? { groupName: { contains: name, mode: "insensitive" as const } } : {}), ...(status ? { status } : {}) }, orderBy: { createdAt: "desc" }, include: { participants: true }, take: 100 }));
 });
-server.get("/api/groups/history/:id", async (req, res) => safe(res, () => prisma.groupAnalysis.findUniqueOrThrow({ where: { id: req.params.id }, include: { participants: true } })));
-server.delete("/api/groups/history/:id", async (req, res) => safe(res, async () => { await prisma.groupAnalysis.delete({ where: { id: req.params.id } }); await audit("delete_history", req.ip, { id: req.params.id }); return { ok: true }; }));
+server.get("/api/groups/history/:id", async (req, res) => safe(res, () => {
+  if (!hasDatabaseUrl()) throw new Error("DATABASE_URL não configurada");
+  return prisma.groupAnalysis.findUniqueOrThrow({ where: { id: req.params.id }, include: { participants: true } });
+}));
+server.delete("/api/groups/history/:id", async (req, res) => safe(res, async () => { if (!hasDatabaseUrl()) throw new Error("DATABASE_URL não configurada"); await prisma.groupAnalysis.delete({ where: { id: req.params.id } }); await audit("delete_history", req.ip, { id: req.params.id }); return { ok: true }; }));
 server.get("/api/groups/history/:id/download.:format", async (req, res) => safe(res, async () => {
+  if (!hasDatabaseUrl()) throw new Error("DATABASE_URL não configurada");
   const row = await prisma.groupAnalysis.findUniqueOrThrow({ where: { id: req.params.id } });
   const file = req.params.format === "csv" ? row.csvPath : row.txtPath;
   if (!file) throw new Error("Export não encontrado");
@@ -99,6 +104,7 @@ server.get("/api/logs/stream", (req, res) => {
 server.get("/api/settings", async (_req, res) => res.json(await settingsPayload()));
 server.patch("/api/settings", async (req, res) => safe(res, async () => {
   const body = z.object({ legalNotice: z.string().min(20).optional() }).parse(req.body);
+  if (!hasDatabaseUrl()) return settingsPayload();
   if (body.legalNotice) await prisma.setting.upsert({ where: { key: "legalNotice" }, create: { key: "legalNotice", value: body.legalNotice }, update: { value: body.legalNotice } });
   return settingsPayload();
 }));
@@ -117,6 +123,8 @@ async function safe(res: express.Response, fn: () => Promise<unknown>) {
 }
 async function exists(path: string) { return fs.access(path).then(() => true).catch(() => false); }
 async function settingsPayload() {
+  const defaultNotice = "Use esta ferramenta apenas em grupos próprios, com autorização e consentimento, para finalidades internas permitidas.";
+  if (!hasDatabaseUrl()) return { paths, limits: { maxRunsPerHour: 5, cooldownSeconds: 600, maxGroupSize: 1200 }, legalNotice: defaultNotice, database: "missing_config" };
   const legalNotice = await prisma.setting.findUnique({ where: { key: "legalNotice" } });
-  return { paths, limits: { maxRunsPerHour: 5, cooldownSeconds: 600, maxGroupSize: 1200 }, legalNotice: legalNotice?.value || "Use esta ferramenta apenas em grupos próprios, com autorização e consentimento, para finalidades internas permitidas." };
+  return { paths, limits: { maxRunsPerHour: 5, cooldownSeconds: 600, maxGroupSize: 1200 }, legalNotice: legalNotice?.value || defaultNotice, database: "connected" };
 }
